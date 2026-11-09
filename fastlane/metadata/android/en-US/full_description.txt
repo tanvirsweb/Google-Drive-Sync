@@ -1,0 +1,16 @@
+GoogleDriveSync keeps folders on your Android device in sync with folders in your Google Drive. It is powered by rclone, the well-known open-source sync engine.
+
+Your files always live in a normal folder on your device, so you can open them anytime, even without a connection. While you're offline, syncing pauses and resumes automatically once you're back online. Nothing is deleted because Google Drive couldn't be reached.
+
+Key Features:
+- Multiple folder pairs: Pair as many device folders with Google Drive folders as you like, each with its own settings.
+- Pick several Drive folders at once: Tick the folders you want, choose where to keep them, and each one gets its own sub-folder and sync.
+- Three sync modes: Upload only, download only, or two-way sync.
+- Automatic background sync: Every 15 minutes to 24 hours, optionally only on Wi-Fi or while charging. Real-time mode uploads changes seconds after they happen.
+- Filters: Sync only certain file types, skip others, limit by file size, skip hidden files, or write your own rclone filter rules.
+- Conflict handling: Replace, keep the newest copy, or keep both copies.
+- Local backups: Before a sync overwrites or deletes a file on your device, a copy is kept for 30 days.
+- Your own Google client (optional): Use rclone's shared client, or enter your own Google OAuth client ID in the app for better speed and quota.
+- Private: No ads, no analytics, no tracking. The app only talks to Google Drive.
+
+GoogleDriveSync needs "All files access" because rclone reads and writes the folders you choose directly.

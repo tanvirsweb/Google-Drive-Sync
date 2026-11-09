@@ -1,0 +1,107 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.tanvir.googlesync'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.tanvir.googlesync"
+        minSdk 24
+        targetSdk 34
+        // Maintained by .github/scripts/update_version.py (git pre-commit hook) from CHANGELOG.md.
+        versionCode 10000
+        versionName "1.0.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    // rclone ships as jniLibs/<abi>/librclone.so. Legacy packaging makes the installer
+    // extract it to nativeLibraryDir, where it may be executed.
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    // One APK per ABI keeps downloads small (the rclone binary is the bulk of the app).
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            universalApk true
+        }
+    }
+
+    // Release signing is applied only when app/release.jks exists (CI decodes it from the
+    // RELEASE_KEYSTORE_BASE64 secret). Without it, assembleRelease produces unsigned APKs,
+    // which is what F-Droid builds and signs itself. Passwords come from the environment only.
+    def releaseKeystore = file('release.jks')
+    signingConfigs {
+        if (releaseKeystore.exists()) {
+            release {
+                storeFile releaseKeystore
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (releaseKeystore.exists()) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Builds the bundled rclone (rclone-android/) from source when its sources change or a
+// binary is missing. Gradle skips the task when nothing changed.
+def rcloneAbis = ['arm64-v8a', 'armeabi-v7a', 'x86_64']
+tasks.register('buildRclone', Exec) {
+    description = 'Cross-compiles the trimmed rclone for Android into src/main/jniLibs'
+    workingDir rootProject.projectDir
+    commandLine 'bash', 'scripts/build-rclone.sh'
+    inputs.files(rootProject.files('rclone-android/main.go', 'rclone-android/go.mod',
+            'rclone-android/go.sum', 'scripts/build-rclone.sh'))
+    outputs.files(rcloneAbis.collect { "src/main/jniLibs/${it}/librclone.so" })
+}
+preBuild.dependsOn 'buildRclone'
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.activity:activity:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.8.3'
+    implementation 'androidx.lifecycle:lifecycle-livedata:2.8.3'
+    implementation 'androidx.work:work-runtime:2.9.1'
+    implementation 'androidx.room:room-runtime:2.6.1'
+    annotationProcessor 'androidx.room:room-compiler:2.6.1'
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    testImplementation 'junit:junit:4.13.2'
+}

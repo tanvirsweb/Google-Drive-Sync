@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Green (Dark Theme) -->
+    <!-- Fills keep the exact icon green; text and glyphs use a lighter tint of it for contrast on dark surfaces. -->
+    <color name="brand_green">#137333</color>
+    <color name="brand_green_text">#5DB97A</color>
+    <color name="brand_green_dark">#0D5B27</color>
+    <color name="brand_green_light">#5DB97A</color>
+    <color name="brand_green_container">#12321D</color>
+    <color name="brand_green_container_text">#A8DAB5</color>
+
+    <!-- Neutral / Surface (Dark) -->
+    <color name="bg">#0D1117</color>
+    <color name="surface">#161B22</color>
+    <color name="surface_variant">#21262D</color>
+    <color name="text_primary">#F0F6FC</color>
+    <color name="text_secondary">#C9D1D9</color>
+    <color name="text_muted">#8B949E</color>
+    <color name="divider">#30363D</color>
+
+    <!-- Status -->
+    <color name="status_ok">#5DB97A</color>
+    <color name="status_warn">#FBBF24</color>
+    <color name="status_warn_bg">#2A2108</color>
+    <color name="status_warn_border">#4D3A0A</color>
+    <color name="status_error">#F85149</color>
+    <color name="status_error_bg">#2B1418</color>
+    <color name="status_error_border">#4F1D25</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+</resources>

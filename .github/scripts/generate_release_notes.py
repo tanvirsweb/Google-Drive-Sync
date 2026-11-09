@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""
+Generate release notes from CHANGELOG.md for GitHub Actions Release pipeline.
+"""
+import os
+import re
+import sys
+from pathlib import Path
+
+
+def main():
+    repo_root = Path.cwd()
+    changelog_path = repo_root / "CHANGELOG.md"
+    if not changelog_path.exists():
+        repo_root = Path(__file__).resolve().parents[2]
+        changelog_path = repo_root / "CHANGELOG.md"
+
+    if not changelog_path.exists():
+        print(f"::error::CHANGELOG.md not found at {changelog_path}", file=sys.stderr)
+        sys.exit(1)
+
+    changelog_content = changelog_path.read_text(encoding="utf-8")
+
+    # 1. Version comes from update_version.py (the previous workflow step).
+    version = os.environ.get("VERSION", "").strip()
+    if not version:
+        match = re.search(r'^##\s*\[([0-9]+(?:\.[0-9]+)*)\]', changelog_content, re.MULTILINE)
+        if not match:
+            print("::error::VERSION not set and no '## [X.Y.Z]' heading in CHANGELOG.md", file=sys.stderr)
+            sys.exit(1)
+        version = match.group(1)
+    tag = f"v{version}"
+    release_title = f"GoogleDriveSync {tag}"
+
+    # 2. Extract release notes for this version from CHANGELOG.md
+    pattern = rf'##\s*\[{re.escape(version)}\][^\n]*\n(.*?)(?=\n##\s*\[|\Z)'
+    notes_match = re.search(pattern, changelog_content, re.DOTALL)
+    notes = notes_match.group(1).strip() if notes_match else ""
+
+    # 3. Create release body
+    release_body = (
+        f"### GoogleDriveSync {tag}\n\n"
+        f"{notes}\n\n"
+        "#### 📥 Which APK?\n"
+        f"- **Most phones**: `GoogleDriveSync-{tag}-arm64-v8a.apk`\n"
+        f"- **Older 32-bit phones**: `GoogleDriveSync-{tag}-armeabi-v7a.apk`\n"
+        f"- **Emulators / x86 Chromebooks**: `GoogleDriveSync-{tag}-x86_64.apk`\n"
+        f"- **Not sure**: `GoogleDriveSync-{tag}-universal.apk` (larger; works everywhere)\n\n"
+        "---\n"
+        "📖 See [CHANGELOG.md](CHANGELOG.md) for full details and change history.\n"
+    )
+
+    body_file = repo_root / "release_body.md"
+    body_file.write_text(release_body, encoding="utf-8")
+
+    # 4. Export outputs for GitHub Actions
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a", encoding="utf-8") as f:
+            f.write(f"tag_name={tag}\n")
+            f.write(f"version={version}\n")
+            f.write(f"release_title={release_title}\n")
+
+    print(f"Version: {version}")
+    print(f"Release Tag: {tag}")
+    print(f"Release Title: {release_title}")
+    print(f"Release Body written to: {body_file}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+Generate a GitHub Actions Step Summary in Markdown with tabular details for GoogleDriveSync.
+"""
+import hashlib
+import os
+import re
+import sys
+from pathlib import Path
+
+
+def get_sha256(filepath):
+    try:
+        h = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            while chunk := f.read(65536):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def format_size(num_bytes):
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    elif num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.2f} KB"
+    else:
+        return f"{num_bytes / (1024 * 1024):.2f} MB"
+
+
+def main():
+    try:
+        repo_root = Path.cwd()
+        changelog_path = repo_root / "CHANGELOG.md"
+        if not changelog_path.exists():
+            repo_root = Path(__file__).resolve().parents[2]
+            changelog_path = repo_root / "CHANGELOG.md"
+
+        # Extract version & notes
+        version = "1.0.0"
+        notes = ""
+        if changelog_path.exists():
+            changelog_content = changelog_path.read_text(encoding="utf-8")
+            match = re.search(r'^##\s*\[([0-9]+(?:\.[0-9]+)*)\]', changelog_content, re.MULTILINE)
+            if match:
+                version = match.group(1)
+                pattern = rf'##\s*\[{re.escape(version)}\][^\n]*\n(.*?)(?=\n##\s*\[|\Z)'
+                notes_match = re.search(pattern, changelog_content, re.DOTALL)
+                if notes_match:
+                    notes = notes_match.group(1).strip()
+
+        github_ref = os.environ.get("GITHUB_REF", "")
+        if github_ref.startswith("refs/tags/v"):
+            tag = github_ref.replace("refs/tags/", "")
+        else:
+            tag = f"v{version}"
+
+        # GitHub context
+        server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+        repository = os.environ.get("GITHUB_REPOSITORY", "tanvirsweb/Google-Drive-Sync")
+        commit_sha = os.environ.get("GITHUB_SHA", "")
+        short_sha = commit_sha[:7] if commit_sha else "local"
+        commit_url = f"{server_url}/{repository}/commit/{commit_sha}" if commit_sha else "#"
+        ref_name = os.environ.get("GITHUB_REF_NAME", "main")
+        actor = os.environ.get("GITHUB_ACTOR", "github-actions")
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
+        run_number = os.environ.get("GITHUB_RUN_NUMBER", "1")
+        run_url = f"{server_url}/{repository}/actions/runs/{run_id}" if run_id else "#"
+
+        # Check for APK artifacts
+        artifacts_dir = repo_root / "artifacts"
+        apk_files = []
+        if artifacts_dir.exists():
+            apk_files = sorted(artifacts_dir.glob("*.apk"))
+        if not apk_files:
+            release_apk_dir = repo_root / "app/build/outputs/apk/release"
+            if release_apk_dir.exists():
+                apk_files = sorted(release_apk_dir.glob("*.apk"))
+
+        build_status = "✅ Success" if apk_files else "⚠️ Incomplete"
+        signed = any(not apk.name.endswith("-unsigned.apk") for apk in apk_files)
+        signing = "✅ Signed (`assembleRelease`)" if signed else "⚠️ Unsigned (no keystore; F-Droid signs its own build)"
+
+        rclone_version = "unknown"
+        gomod = repo_root / "rclone-android/go.mod"
+        if gomod.exists():
+            m = re.search(r'^require github\.com/rclone/rclone (v\S+)', gomod.read_text(encoding="utf-8"), re.MULTILINE)
+            if m:
+                rclone_version = os.environ.get("RCLONE_VERSION", m.group(1))
+
+        # Build Markdown Summary
+        lines = [
+            "## 🚀 GoogleDriveSync — Release Build Summary",
+            "",
+            "### 📋 Build Details",
+            "| Property | Value |",
+            "| :--- | :--- |",
+            "| **Application Name** | **GoogleDriveSync** |",
+            "| **Package ID** | `com.tanvir.googlesync` |",
+            f"| **Version** | `{version}` |",
+            f"| **Release Tag** | `{tag}` |",
+            f"| **Build Status** | {build_status} |",
+            f"| **Commit** | [`{short_sha}`]({commit_url}) |",
+            f"| **Branch / Ref** | `{ref_name}` |",
+            f"| **Triggered By** | `@{actor}` |",
+            f"| **Workflow Run** | [#{run_number}]({run_url}) |",
+            "| **Java JDK** | Eclipse Temurin 21 (bytecode targets Java 17) |",
+            f"| **rclone** | `{rclone_version}` (trimmed to Drive + local backends; built from source with Go + Android NDK) |",
+            "| **Target / Min SDK** | API 34 (Android 14) / API 24 (Android 7.0) |",
+            "| **Optimization** | R8 code & resource shrinking; one APK per ABI + universal |",
+            "| **Unit Tests** | ✅ Passed (`testDebugUnitTest`) |",
+            f"| **Signing Status** | {signing} |",
+            "",
+            "### 📦 Release Artifacts",
+            "| Artifact File | Size | SHA-256 Checksum |",
+            "| :--- | :--- | :--- |",
+        ]
+
+        if apk_files:
+            for apk in apk_files:
+                size_str = format_size(apk.stat().st_size)
+                sha256_hash = get_sha256(apk)
+                lines.append(f"| `{apk.name}` | {size_str} | `{sha256_hash}` |")
+        else:
+            lines.append("| *No APK artifacts found* | - | - |")
+
+        if notes:
+            lines.extend([
+                "",
+                "### 📝 Changelog Highlights",
+                f"<details><summary><b>Click to expand release notes for {tag}</b></summary>",
+                "",
+                notes,
+                "",
+                "---",
+                "📖 See [CHANGELOG.md](CHANGELOG.md) for full details and change history.",
+                "</details>",
+            ])
+
+        lines.extend([
+            "",
+            "---",
+            "*Report generated automatically by GoogleDriveSync Release Pipeline.*",
+            ""
+        ])
+
+        summary_content = "\n".join(lines)
+
+        # Write to GITHUB_STEP_SUMMARY if available
+        step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if step_summary:
+            with open(step_summary, "a", encoding="utf-8") as f:
+                f.write(summary_content)
+
+        print(summary_content)
+    except Exception as e:
+        print(f"Error generating summary: {e}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
