@@ -106,6 +106,20 @@ jobs:
       - name: 🔧 Grant Execute Permissions for Gradlew
         run: chmod +x gradlew
 
+      # The wrapper downloads Gradle from GitHub, which occasionally answers 502/503/504.
+      # The wrapper gives up on the first failure, so retry with back-off before any build step.
+      # (Once a run succeeds, setup-java's Gradle cache makes later runs skip the download.)
+      - name: 🐘 Download Gradle (with retries)
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if ./gradlew --version; then exit 0; fi
+            delay=$((attempt * 20))
+            echo "::warning::Gradle download failed (attempt $attempt/5); retrying in ${delay}s"
+            sleep "$delay"
+          done
+          echo "::error::Could not download Gradle after 5 attempts"
+          exit 1
+
       - name: 🔢 Verify versionCode, versionName & Fastlane Changelog
         id: version
         run: python3 .github/scripts/update_version.py --check
